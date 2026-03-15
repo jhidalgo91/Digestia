@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthSession } from "@/lib/auth";
 
 /**
  * POST /api/ai/chat
  * AI-powered chatbot for patient queries.
+ * Requires an authenticated session.
  */
 export async function POST(request: NextRequest) {
+  const session = await getAuthSession();
+  if (session instanceof NextResponse) return session;
+
   const body = await request.json();
   const { messages, patientContext } = body;
 
