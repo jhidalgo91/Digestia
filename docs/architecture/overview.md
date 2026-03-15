@@ -4,15 +4,15 @@
 
 | Capa | Tecnología | Versión |
 |------|-----------|---------|
-| Framework | Next.js (App Router) | 14+ |
+| Framework | Next.js (App Router) | 16+ |
 | Lenguaje | TypeScript | 5+ |
-| ORM | Prisma | 6+ |
+| ORM | Prisma | 5+ |
 | Base de datos | MySQL | 8+ |
-| Autenticación | NextAuth.js | 5 |
-| Estilos | Tailwind CSS | 4 |
+| Autenticación | NextAuth.js | 4+ |
+| Estilos | Tailwind CSS | 4+ |
 | IA | OpenAI API | gpt-4o-mini |
-| Notificaciones | Resend | 4+ |
-| Validación | Zod | 3+ |
+| Notificaciones | Resend | 6+ |
+| Validación | Zod | 4+ |
 
 ## Principios arquitectónicos
 
