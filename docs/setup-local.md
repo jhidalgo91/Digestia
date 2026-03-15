@@ -18,7 +18,7 @@ Esta guía te permite poner en marcha DigestAI en tu máquina de desarrollo en m
 >   -e MYSQL_DATABASE=digestia \
 >   -e MYSQL_USER=digestia_user \
 >   -e MYSQL_PASSWORD=digestia_pass \
->   -p 3306:3306 -d mysql:8
+>   -p 3306:3306 -d mysql:8.0
 > ```
 
 ---
