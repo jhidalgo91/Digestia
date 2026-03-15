@@ -1,0 +1,419 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH & USERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(PATIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  patient       Patient?
+  nutritionist  Nutritionist?
+}
+
+enum Role {
+  PATIENT
+  NUTRITIONIST
+  ADMIN
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATIENT PROFILE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Patient {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  weight               Float?
+  height               Float?
+  age                  Int?
+  sex                  Sex?
+  activityLevel        ActivityLevel      @default(MODERATE)
+  workSchedule         String?
+  usualSleepHours      Float?
+  allergies            String?            @db.Text
+  intolerances         String?            @db.Text
+  dietaryPreferences   String?            @db.Text
+  mode                 PatientMode        @default(AUTONOMOUS)
+  nutritionistId       String?
+  inviteCode           String?            @unique
+  targetCaloriesMin    Int?
+  targetCaloriesMax    Int?
+  targetProteinG       Float?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nutritionist         Nutritionist?      @relation(fields: [nutritionistId], references: [id])
+  intakes              Intake[]
+  habits               HabitLog[]
+  supplementLogs       SupplementLog[]
+  goals                Goal[]
+  progressLogs         ProgressLog[]
+  patientSupplements   PatientSupplement[]
+  mealPlans            MealPlan[]
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  MODERATE
+  HIGH
+}
+
+enum PatientMode {
+  AUTONOMOUS
+  SUPERVISED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUTRITIONIST PROFILE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Nutritionist {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  bio         String?   @db.Text
+  specialty   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patients    Patient[]
+  mealPlans   MealPlan[]
+  alerts      DeviationAlert[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEAL PLANS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MealPlan {
+  id              String         @id @default(cuid())
+  patientId       String
+  nutritionistId  String?
+  name            String
+  description     String?        @db.Text
+  startDate       DateTime
+  endDate         DateTime?
+  isActive        Boolean        @default(true)
+  targetCalMin    Int?
+  targetCalMax    Int?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  nutritionist    Nutritionist?  @relation(fields: [nutritionistId], references: [id])
+  plannedMeals    PlannedMeal[]
+}
+
+model PlannedMeal {
+  id          String     @id @default(cuid())
+  mealPlanId  String
+  dayOfWeek   Int?
+  mealType    MealType
+  description String     @db.Text
+  colorTag    ColorTag   @default(NEUTRAL)
+  orderIndex  Int        @default(0)
+  mealPlan    MealPlan   @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  intakes     Intake[]
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  PRE_WORKOUT
+  POST_WORKOUT
+}
+
+enum ColorTag {
+  BLUE_PROTEIN
+  ORANGE_CARBS
+  GREEN_VEGGIES
+  NEUTRAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTAKE (NUTRITION DIARY)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Intake {
+  id                    String           @id @default(cuid())
+  patientId             String
+  plannedMealId         String?
+  date                  DateTime
+  mealType              MealType
+  status                IntakeStatus     @default(PLANNED)
+  planDescription       String?          @db.Text
+  actualDescription     String?          @db.Text
+  photoUrl              String?
+  digestiveFeedback     DigestiveMood?
+  hasGas                Boolean?
+  processedFoodType     ProcessedType?
+  extraFat10g           Int              @default(0)
+  extraProtein10g       Int              @default(0)
+  extraFruit            Int              @default(0)
+  extremeHunger         Boolean          @default(false)
+  notes                 String?          @db.Text
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  patient               Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plannedMeal           PlannedMeal?     @relation(fields: [plannedMealId], references: [id])
+  foodItems             IntakeFoodItem[]
+}
+
+enum IntakeStatus {
+  PLANNED
+  COMPLETED
+  MODIFIED
+  SKIPPED
+}
+
+enum DigestiveMood {
+  GOOD
+  NEUTRAL
+  BAD
+}
+
+enum ProcessedType {
+  GOOD_PROCESSED
+  ULTRA_PROCESSED
+  NEUTRAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FOOD ITEMS & SUBSTITUTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FoodItem {
+  id              String           @id @default(cuid())
+  name            String
+  group           FoodGroup
+  subgroup        String?
+  processedType   ProcessedType    @default(NEUTRAL)
+  caloriesPer100g Float?
+  proteinPer100g  Float?
+  fatPer100g      Float?
+  carbsPer100g    Float?
+  createdAt       DateTime         @default(now())
+  intakeFoodItems IntakeFoodItem[]
+}
+
+enum FoodGroup {
+  PROTEIN
+  FAT
+  CARBOHYDRATE
+  VEGETABLE
+  FRUIT
+  DAIRY
+  LEGUME
+  OTHER
+}
+
+model IntakeFoodItem {
+  id         String   @id @default(cuid())
+  intakeId   String
+  foodItemId String
+  grams      Float?
+  notes      String?
+  intake     Intake   @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HABITS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HabitLog {
+  id                   String    @id @default(cuid())
+  patientId            String
+  date                 DateTime
+  sleepHours           Float?
+  bedtime              DateTime?
+  wakeTime             DateTime?
+  lastMealTime         DateTime?
+  breakfastTime        DateTime?
+  fastingDurationHours Float?
+  waterGlasses         Int?
+  waterObjective       Int       @default(8)
+  strengthSessions     Int?
+  cardioMinutes        Float?
+  cardioAvgBpm         Int?
+  naturalLightMinutes  Int?
+  naturalLightMorning  Boolean?
+  notes                String?   @db.Text
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  patient              Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPPLEMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Supplement {
+  id                 String              @id @default(cuid())
+  name               String
+  defaultDose        Float?
+  defaultDoseUnit    String?
+  notes              String?             @db.Text
+  patientSupplements PatientSupplement[]
+}
+
+model PatientSupplement {
+  id            String          @id @default(cuid())
+  patientId     String
+  supplementId  String
+  doseMg        Float?
+  doseUnit      String?
+  scheduledTime String?
+  frequency     String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  patient       Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  supplement    Supplement      @relation(fields: [supplementId], references: [id])
+  logs          SupplementLog[]
+}
+
+model SupplementLog {
+  id                  String            @id @default(cuid())
+  patientId           String
+  patientSupplementId String
+  date                DateTime
+  taken               Boolean           @default(false)
+  actualTime          DateTime?
+  notes               String?           @db.Text
+  createdAt           DateTime          @default(now())
+  patient             Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientSupplement   PatientSupplement @relation(fields: [patientSupplementId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOALS & PROGRESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Goal {
+  id          String     @id @default(cuid())
+  patientId   String
+  type        GoalType
+  targetValue Float?
+  targetDate  DateTime?
+  description String?    @db.Text
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  patient     Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+enum GoalType {
+  WEIGHT_LOSS
+  WEIGHT_GAIN
+  BODY_COMPOSITION
+  PERFORMANCE
+  HEALTH_GENERAL
+}
+
+model ProgressLog {
+  id              String   @id @default(cuid())
+  patientId       String
+  date            DateTime
+  weight          Float?
+  bodyFatPercent  Float?
+  muscleMassKg    Float?
+  waistCm         Float?
+  hipCm           Float?
+  energyLevel     Int?
+  hungerLevel     Int?
+  moodLevel       Int?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEVIATION ALERTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DeviationAlert {
+  id               String          @id @default(cuid())
+  patientId        String?
+  nutritionistId   String?
+  type             AlertType
+  message          String          @db.Text
+  isRead           Boolean         @default(false)
+  resolvedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  nutritionist     Nutritionist?   @relation(fields: [nutritionistId], references: [id])
+}
+
+enum AlertType {
+  CARBS_AT_DINNER
+  LOW_ADHERENCE
+  BAD_DIGESTION
+  MISSING_LOGS
+  EXTREME_HUNGER
+  GAS_LEGUMES
+  SUPPLEMENT_MISSED
+  CUSTOM
+}
+
