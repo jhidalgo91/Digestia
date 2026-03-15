@@ -8,15 +8,16 @@ const analyzeSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
 });
+import { getAuthSession } from "@/lib/auth";
 
 /**
  * POST /api/ai/analyze
  * Sends daily summary data to OpenAI and returns personalized feedback.
- * Requires authentication. The requesting user must own the patient record.
+ * Requires an authenticated session.
  */
 export async function POST(request: NextRequest) {
-  const { session, response: authError } = await requireSession();
-  if (authError) return authError;
+  const session = await getAuthSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await request.json();
   const parsed = analyzeSchema.safeParse(body);
