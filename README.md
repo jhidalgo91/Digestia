@@ -42,6 +42,7 @@ npm run dev
 
 ## Documentación
 
+- [Guía de configuración local](docs/setup-local.md)
 - [Arquitectura general](docs/architecture/overview.md)
 - [Modelo de datos](docs/architecture/data-model.md)
 - [Contratos de API](docs/architecture/api-contracts.md)
