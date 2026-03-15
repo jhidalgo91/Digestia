@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthSession } from "@/lib/auth";
 
 /**
  * POST /api/ai/analyze
  * Sends daily summary data to OpenAI and returns personalized feedback.
+ * Requires an authenticated session.
  */
 export async function POST(request: NextRequest) {
+  const session = await getAuthSession();
+  if (session instanceof NextResponse) return session;
+
   const body = await request.json();
   const { patientId, dateFrom, dateTo } = body;
 
