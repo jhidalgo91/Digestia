@@ -4,7 +4,7 @@ Aplicación de nutrición personalizada con seguimiento de dieta, hábitos, supl
 
 ## Stack tecnológico
 
-- **Framework**: [Next.js 14+](https://nextjs.org/) con App Router
+- **Framework**: [Next.js 16+](https://nextjs.org/) con App Router
 - **Lenguaje**: TypeScript
 - **ORM**: [Prisma](https://www.prisma.io/) con MySQL
 - **Estilos**: [Tailwind CSS](https://tailwindcss.com/)
@@ -24,24 +24,71 @@ Aplicación de nutrición personalizada con seguimiento de dieta, hábitos, supl
 | 🤖 IA | Análisis semanal personalizado + chatbot asistente nutricional |
 | 👨‍⚕️ Panel Nutricionista | Dashboard multihilo con semáforos de cumplimiento por paciente |
 
+## Requisitos previos
+
+- **Node.js** 18+ (recomendado: 22 LTS)
+- **MySQL** 8+
+- Cuenta en [OpenAI](https://platform.openai.com/) para el módulo de IA
+- Cuenta en [Resend](https://resend.com/) para notificaciones por email
+
 ## Inicio rápido
 
 ```bash
-# Instalar dependencias
+# 1. Clonar el repositorio
+git clone https://github.com/jhidalgo91/Digestia.git
+cd Digestia
+
+# 2. Instalar dependencias
 npm install
 
-# Configurar variables de entorno
+# 3. Configurar variables de entorno
 cp .env.example .env.local
+# Edita .env.local con tus valores (ver tabla de variables a continuación)
 
-# Aplicar esquema de base de datos
-npx prisma migrate dev
+# 4. Generar el cliente Prisma
+npx prisma generate
 
-# Iniciar servidor de desarrollo
+# 5. Aplicar el esquema de base de datos
+npx prisma migrate dev --name init
+
+# 6. Iniciar el servidor de desarrollo
 npm run dev
+```
+
+La aplicación estará disponible en `http://localhost:3000`.
+
+## Variables de entorno
+
+Copia `.env.example` a `.env.local` y rellena los valores:
+
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `DATABASE_URL` | Cadena de conexión MySQL | `mysql://user:pass@localhost:3306/digestia` |
+| `NEXTAUTH_URL` | URL base de la aplicación | `http://localhost:3000` |
+| `NEXTAUTH_SECRET` | Secreto para JWT de NextAuth (mín. 32 chars). Genera con: `openssl rand -base64 32` | `<secreto-aleatorio-32-chars>` |
+| `OPENAI_API_KEY` | API key de OpenAI para análisis nutricional y chatbot | `sk-...` |
+| `RESEND_API_KEY` | API key de Resend para envío de emails | `re_...` |
+| `RESEND_FROM_EMAIL` | Dirección remitente de los emails | `noreply@digestai.app` |
+
+> **Nota**: Nunca subas `.env.local` al repositorio. Está incluido en `.gitignore`.
+
+## Scripts disponibles
+
+```bash
+npm run dev        # Servidor de desarrollo
+npm run build      # Build de producción
+npm run start      # Servidor de producción (requiere build previo)
+npm run lint       # Lint con ESLint
+
+npm run db:generate  # Genera el cliente Prisma
+npm run db:migrate   # Aplica migraciones en desarrollo
+npm run db:push      # Sincroniza esquema sin migraciones (prototipado)
+npm run db:studio    # Abre Prisma Studio (GUI de base de datos)
 ```
 
 ## Documentación
 
+- [Guía de configuración local](docs/setup-local.md)
 - [Arquitectura general](docs/architecture/overview.md)
 - [Modelo de datos](docs/architecture/data-model.md)
 - [Contratos de API](docs/architecture/api-contracts.md)

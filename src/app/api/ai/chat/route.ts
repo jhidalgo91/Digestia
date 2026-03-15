@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from "@/lib/getSession";
+import { z } from "zod";
+
+const chatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(4000),
+});
+
+const chatSchema = z.object({
+  messages: z.array(chatMessageSchema).min(1).max(50),
+  patientContext: z.record(z.string(), z.unknown()).optional(),
+});
 
 /**
  * POST /api/ai/chat
  * AI-powered chatbot for patient queries.
+ * Requires authentication.
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { messages, patientContext } = body;
+  const { response: authError } = await requireSession();
+  if (authError) return authError;
 
-  if (!messages || !Array.isArray(messages)) {
-    return NextResponse.json({ error: "messages array is required" }, { status: 400 });
+  const body = await request.json();
+  const parsed = chatSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
+  const { messages, patientContext } = parsed.data;
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {

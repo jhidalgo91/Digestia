@@ -1,0 +1,104 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CI Workflow – DigestAI
+#
+# Firewall fixes applied:
+#
+# 1. checkpoint.prisma.io (DNS block)
+#    Cause : Prisma CLI sends telemetry / version-check requests on every
+#            `prisma generate` invocation.
+#    Fix   : Set CHECKPOINT_DISABLE=1 (Prisma ≥ 4) to suppress all outbound
+#            calls to checkpoint.prisma.io.
+#
+# 2. fonts.googleapis.com (DNS block)
+#    Cause : Next.js font optimisation fetches Google Font stylesheets to
+#            inline them at build time when next/font/google is used, or when
+#            CSS references Google Fonts URLs.
+#    Fix   : globals.css now defines system font stacks directly instead of
+#            referencing --font-geist-sans / --font-geist-mono variables that
+#            depended on next/font/google being loaded.  No Google Fonts are
+#            imported anywhere in this project.
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main, "copilot/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  # ── Prisma ──────────────────────────────────────────────────────────────────
+  # Disable the Prisma checkpoint / telemetry call that contacts
+  # checkpoint.prisma.io.  Without this the job is blocked by the firewall.
+  CHECKPOINT_DISABLE: "1"
+
+  # ── Next.js ─────────────────────────────────────────────────────────────────
+  # Disable Next.js anonymous telemetry (no external call).
+  NEXT_TELEMETRY_DISABLED: "1"
+
+  # ── Dummy environment variables ──────────────────────────────────────────────
+  # `prisma generate` only reads schema.prisma; it does not connect to a DB.
+  # A dummy URL satisfies the schema validation without needing a real database.
+  DATABASE_URL: "mysql://ci:ci@localhost:3306/digestia_ci"
+  NEXTAUTH_SECRET: "ci-secret-not-used-in-tests"
+  NEXTAUTH_URL: "http://localhost:3000"
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  lint-build:
+    name: Lint · Prisma validate · Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build Next.js app
+        run: npm run build
+
+  # ────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit

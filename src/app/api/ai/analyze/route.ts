@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/getSession";
+import { z } from "zod";
+
+const analyzeSchema = z.object({
+  patientId: z.string().min(1),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+import { getAuthSession } from "@/lib/auth";
 
 /**
  * POST /api/ai/analyze
  * Sends daily summary data to OpenAI and returns personalized feedback.
+ * Requires an authenticated session.
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { patientId, dateFrom, dateTo } = body;
+  const session = await getAuthSession();
+  if (session instanceof NextResponse) return session;
 
-  if (!patientId) {
-    return NextResponse.json({ error: "patientId is required" }, { status: 400 });
+  const body = await request.json();
+  const parsed = analyzeSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+  const { patientId, dateFrom, dateTo } = parsed.data;
+
+  // Ownership check: verify the patient belongs to the authenticated user
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, userId: session!.user.id },
+  });
+  if (!patient) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Gather data for AI analysis
