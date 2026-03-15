@@ -1,35 +1,22 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # CI Workflow – DigestAI
 #
-# Fixes applied for Copilot firewall restrictions:
+# Firewall fixes applied:
 #
 # 1. checkpoint.prisma.io (DNS block)
-#    Cause : Prisma CLI phones home for telemetry / version checks on every
+#    Cause : Prisma CLI sends telemetry / version-check requests on every
 #            `prisma generate` invocation.
-#    Fix   : Set CHECKPOINT_DISABLE=1 (supported by Prisma ≥ 4) and
-#            PRISMA_CLI_QUERY_ENGINE_TYPE=library so the binary download from
-#            binaries.prisma.sh is also skipped when the JS engine suffices.
+#    Fix   : Set CHECKPOINT_DISABLE=1 (Prisma ≥ 4) to suppress all outbound
+#            calls to checkpoint.prisma.io.
 #
 # 2. fonts.googleapis.com (DNS block)
-#    Cause : Next.js font-optimisation (enabled by default) fetches Google Font
-#            stylesheets to inline them at build time.  The Geist font CSS
-#            variables left from the create-next-app template (--font-geist-sans,
-#            --font-geist-mono) are loaded via Google Fonts.
-#    Fix   : Remove those variables from globals.css (done in the same PR),
-#            set NEXT_DISABLE_GOOGLE_FONTS=1, and pass
-#            --no-experimental-fetch-fonts to the build if needed.
-#            As a belt-and-suspenders measure, next.config.ts sets
-#            optimizeFonts: false so no external font URL is ever fetched.
-#
-# 3. Node.js version
-#    The firewall log shows Node 24.14.0 was used; Next.js 16 / React 19 run
-#    best on the current Active LTS (Node 22).  Node 24 is still "Current"
-#    (not LTS) and has caused subtle ESM/TypeScript resolution differences.
-#
-# 4. Caching
-#    npm cache is restored between runs to dramatically reduce install time.
-#    Prisma-generated client is cached per schema hash so `prisma generate`
-#    is a no-op when nothing changed.
+#    Cause : Next.js font optimisation fetches Google Font stylesheets to
+#            inline them at build time when next/font/google is used, or when
+#            CSS references Google Fonts URLs.
+#    Fix   : globals.css now defines system font stacks directly instead of
+#            referencing --font-geist-sans / --font-geist-mono variables that
+#            depended on next/font/google being loaded.  No Google Fonts are
+#            imported anywhere in this project.
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -45,68 +32,73 @@ env:
   # Disable the Prisma checkpoint / telemetry call that contacts
   # checkpoint.prisma.io.  Without this the job is blocked by the firewall.
   CHECKPOINT_DISABLE: "1"
-  # Use the JS (library) query engine so Prisma does NOT try to download a
-  # platform-specific binary from binaries.prisma.sh.
-  PRISMA_CLI_QUERY_ENGINE_TYPE: "library"
-  # Skip auto-install of the native Rust engine during `prisma generate`.
-  PRISMA_GENERATE_SKIP_AUTOINSTALL: "true"
 
   # ── Next.js ─────────────────────────────────────────────────────────────────
   # Disable Next.js anonymous telemetry (no external call).
   NEXT_TELEMETRY_DISABLED: "1"
-  # Prevent Next.js font optimisation from fetching Google Fonts stylesheets.
-  # This is the env-var guard; next.config.ts also sets optimizeFonts: false.
-  NEXT_DISABLE_GOOGLE_FONTS: "1"
 
-  # ── Dummy database URL ───────────────────────────────────────────────────────
+  # ── Dummy environment variables ──────────────────────────────────────────────
   # `prisma generate` only reads schema.prisma; it does not connect to a DB.
   # A dummy URL satisfies the schema validation without needing a real database.
   DATABASE_URL: "mysql://ci:ci@localhost:3306/digestia_ci"
-
-  # ── NextAuth ─────────────────────────────────────────────────────────────────
   NEXTAUTH_SECRET: "ci-secret-not-used-in-tests"
   NEXTAUTH_URL: "http://localhost:3000"
 
 jobs:
-  build:
-    name: Lint · Generate · Build
+  # ────────────────────────────────────────────────────────────────────────────
+  lint-build:
+    name: Lint · Prisma validate · Build
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js (LTS 22) ──────────────────────────────────────────────────
-      # Pinned to 22.x (Active LTS).  Avoid "Current" Node 24 until it reaches
-      # LTS status; it has caused issues with some native add-ons and ESM paths.
       - name: Set up Node.js 22 LTS
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
 
-      # ── 3. Install dependencies ───────────────────────────────────────────────
-      # `--prefer-offline` uses the npm cache restored in the previous step.
       - name: Install dependencies
-        run: npm ci --prefer-offline
+        run: npm ci
 
-      # ── 4. Prisma generate ───────────────────────────────────────────────────
-      # Must run before TypeScript compilation / next build so the generated
-      # @prisma/client types are available.
-      # CHECKPOINT_DISABLE=1 is already set globally above; adding it here too
-      # for clarity and safety.
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
       - name: Generate Prisma client
         run: npx prisma generate
-        env:
-          CHECKPOINT_DISABLE: "1"
 
-      # ── 5. Lint ──────────────────────────────────────────────────────────────
       - name: Lint
         run: npm run lint
 
-      # ── 6. Build ─────────────────────────────────────────────────────────────
       - name: Build Next.js app
         run: npm run build
+
+  # ────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
