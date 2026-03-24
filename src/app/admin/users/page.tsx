@@ -1,139 +1,222 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface AdminUser {
   id: string;
   name: string | null;
   email: string | null;
-  role: string;
-  status: string;
+  role: "PATIENT" | "NUTRITIONIST" | "ADMIN";
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  subscriptionStatus: "FREE" | "PRO" | "ENTERPRISE" | "CANCELLED";
   createdAt: string;
   nutritionist: { bio: string | null; specialty: string | null } | null;
 }
 
-const FILTER_LABELS: Record<string, string> = {
-  PENDING: "⏳ Pendientes",
-  APPROVED: "✅ Aprobados",
-  REJECTED: "❌ Rechazados",
-  ALL: "Todos",
+type StatusFilter = "ALL" | "PENDING" | "APPROVED" | "REJECTED";
+type RoleFilter = "ALL" | "PATIENT" | "NUTRITIONIST" | "ADMIN";
+
+const ROLE_COLORS: Record<string, string> = {
+  PATIENT: "bg-emerald-100 text-emerald-900 border border-emerald-300",
+  NUTRITIONIST: "bg-violet-100 text-violet-900 border border-violet-300",
+  ADMIN: "bg-blue-100 text-blue-900 border border-blue-300",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  PENDING: "bg-amber-100 text-amber-900 border border-amber-300",
+  APPROVED: "bg-green-100 text-green-900 border border-green-300",
+  REJECTED: "bg-red-100 text-red-900 border border-red-300",
+};
+
+const SUB_COLORS: Record<string, string> = {
+  FREE: "bg-zinc-100 text-zinc-700 border border-zinc-300",
+  PRO: "bg-blue-100 text-blue-900 border border-blue-300",
+  ENTERPRISE: "bg-violet-100 text-violet-900 border border-violet-300",
+  CANCELLED: "bg-red-100 text-red-900 border border-red-300",
 };
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+  const [search, setSearch] = useState("");
 
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ role: "NUTRITIONIST" });
-    if (filter !== "ALL") params.set("status", filter);
+    const params = new URLSearchParams();
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (roleFilter !== "ALL") params.set("role", roleFilter);
     const res = await fetch(`/api/admin/users?${params}`);
-    if (res.ok) {
-      setUsers(await res.json());
-    }
+    if (res.ok) setUsers(await res.json());
     setLoading(false);
-  }
+  }, [statusFilter, roleFilter]);
 
   useEffect(() => {
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [fetchUsers]);
 
-  async function updateStatus(userId: string, status: "APPROVED" | "REJECTED") {
-    setActionLoading(userId);
-    const res = await fetch(`/api/admin/users/${userId}`, {
+  async function updateUser(
+    id: string,
+    patch: Partial<{ status: string; role: string; subscriptionStatus: string }>
+  ) {
+    setActionLoading(id);
+    await fetch(`/api/admin/users/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
+    await fetchUsers();
     setActionLoading(null);
-    if (res.ok) {
-      await fetchUsers();
-    }
   }
 
+  const filtered = users.filter((u) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      u.name?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.nutritionist?.specialty?.toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 p-6">
-      <div className="mx-auto max-w-4xl">
-        <h1 className="mb-6 text-2xl font-bold text-zinc-800 dark:text-zinc-100">
-          Panel de administración — Nutricionistas
-        </h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">Gestión de usuarios</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          CRUD completo — roles, estados de cuenta y suscripciones.
+        </p>
+      </div>
 
-        {/* Filter tabs */}
-        <div className="mb-4 flex gap-2">
-          {(["PENDING", "APPROVED", "REJECTED", "ALL"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                filter === s
-                  ? "bg-emerald-600 text-white"
-                  : "border border-zinc-200 bg-white text-zinc-600 hover:border-emerald-300 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-              }`}
-            >
-              {FILTER_LABELS[s]}
-            </button>
-          ))}
-        </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre o email…"
+          aria-label="Buscar usuarios"
+          className="min-w-[200px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 font-semibold focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          aria-label="Filtrar por estado"
+          className="min-w-[160px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 font-semibold appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          style={{ color: 'rgb(17,24,39)', WebkitTextFillColor: 'rgb(17,24,39)', opacity: 1 }}
+        >
+          <option value="ALL">Todos los estados</option>
+          <option value="PENDING">Pendientes</option>
+          <option value="APPROVED">Aprobados</option>
+          <option value="REJECTED">Rechazados</option>
+        </select>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+          aria-label="Filtrar por rol"
+          className="min-w-[160px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 font-semibold appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          style={{ color: 'rgb(17,24,39)', WebkitTextFillColor: 'rgb(17,24,39)', opacity: 1 }}
+        >
+          <option value="ALL">Todos los roles</option>
+          <option value="PATIENT">Paciente</option>
+          <option value="NUTRITIONIST">Nutricionista</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+      </div>
 
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
         {loading ? (
-          <p className="text-zinc-500">Cargando…</p>
-        ) : users.length === 0 ? (
-          <div className="rounded-2xl bg-white dark:bg-zinc-800 p-8 text-center text-zinc-500">
-            No hay usuarios en este estado.
+          <div className="py-16 text-center text-sm text-zinc-400">Cargando usuarios…</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-sm text-zinc-400">
+            No se encontraron usuarios.
           </div>
         ) : (
-          <div className="space-y-4">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="rounded-2xl bg-white dark:bg-zinc-800 p-5 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-semibold text-zinc-800 dark:text-zinc-100">
-                    {user.name ?? "—"}
-                  </p>
-                  <p className="text-sm text-zinc-500">{user.email}</p>
-                  {user.nutritionist?.specialty && (
-                    <p className="mt-0.5 text-xs text-zinc-400">
-                      Especialidad: {user.nutritionist.specialty}
-                    </p>
-                  )}
-                  {user.nutritionist?.bio && (
-                    <p className="mt-0.5 text-xs text-zinc-400 max-w-sm truncate">
-                      {user.nutritionist.bio}
-                    </p>
-                  )}
-                  <span className="mt-1 inline-block text-xs text-zinc-400">
-                    {FILTER_LABELS[user.status] ?? user.status}
-                  </span>
-                </div>
-
-                {user.status === "PENDING" && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => updateStatus(user.id, "APPROVED")}
+          <table className="min-w-full text-sm">
+            <thead className="bg-zinc-50 text-xs font-semibold uppercase tracking-wide text-zinc-600 border-b border-zinc-200">
+              <tr>
+                <th className="px-4 py-3 text-left">Usuario</th>
+                <th className="px-4 py-3 text-left">Rol</th>
+                <th className="px-4 py-3 text-left">Estado</th>
+                <th className="px-4 py-3 text-left">Suscripción</th>
+                <th className="px-4 py-3 text-left">Registro</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {filtered.map((user) => (
+                <tr key={user.id} className="hover:bg-zinc-50 transition">
+                  <td className="px-4 py-3 min-w-[180px]">
+                    <p className="font-semibold text-zinc-900">{user.name ?? "Sin nombre"}</p>
+                    <p className="text-xs text-zinc-500">{user.email ?? "—"}</p>
+                    {user.nutritionist?.specialty && (
+                      <p className="text-xs text-zinc-500">
+                        Esp: {user.nutritionist.specialty}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={user.role}
                       disabled={actionLoading === user.id}
-                      className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                      onChange={(e) => updateUser(user.id, { role: e.target.value })}
+                      className={`${ROLE_COLORS[user.role]} rounded-full px-2.5 py-1 pr-8 text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-zinc-900 bg-white`}
+                      style={{ color: 'rgb(17,24,39)', WebkitTextFillColor: 'rgb(17,24,39)', opacity: 1 }}
                     >
-                      Aprobar
-                    </button>
-                    <button
-                      onClick={() => updateStatus(user.id, "REJECTED")}
+                      <option value="PATIENT">Paciente</option>
+                      <option value="NUTRITIONIST">Nutricionista</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={user.status}
                       disabled={actionLoading === user.id}
-                      className="rounded-full border border-red-300 px-4 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-60"
+                      onChange={(e) => updateUser(user.id, { status: e.target.value })}
+                      className={`${STATUS_COLORS[user.status]} rounded-full px-2.5 py-1 pr-8 text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-zinc-900 bg-white`}
+                      style={{ color: 'rgb(17,24,39)', WebkitTextFillColor: 'rgb(17,24,39)', opacity: 1 }}
                     >
-                      Rechazar
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                      <option value="PENDING">Pendiente</option>
+                      <option value="APPROVED">Aprobado</option>
+                      <option value="REJECTED">Rechazado</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={user.subscriptionStatus}
+                      disabled={actionLoading === user.id}
+                      onChange={(e) =>
+                        updateUser(user.id, { subscriptionStatus: e.target.value })
+                      }
+                      className={`${SUB_COLORS[user.subscriptionStatus]} rounded-full px-2.5 py-1 pr-8 text-xs font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-zinc-900 bg-white`}
+                      style={{ color: 'rgb(17,24,39)', WebkitTextFillColor: 'rgb(17,24,39)', opacity: 1 }}
+                    >
+                      <option value="FREE">Free</option>
+                      <option value="PRO">Pro</option>
+                      <option value="ENTERPRISE">Enterprise</option>
+                      <option value="CANCELLED">Cancelado</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-500 whitespace-nowrap">
+                    {new Date(user.createdAt).toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
+
+      <p className="text-xs text-zinc-400">
+        {filtered.length} usuario{filtered.length !== 1 ? "s" : ""} mostrados
+        {actionLoading && " — guardando cambios…"}
+      </p>
     </div>
   );
 }

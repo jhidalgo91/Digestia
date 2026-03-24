@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/getSession";
+import { sendAlertEmail } from "@/lib/notifications";
 import { z } from "zod";
 
 const alertCreateSchema = z.object({
@@ -66,6 +67,24 @@ export async function POST(request: NextRequest) {
   const alert = await prisma.deviationAlert.create({
     data: parsed.data,
   });
+
+  // Send email notification to the patient (fire-and-forget)
+  if (parsed.data.patientId) {
+    const patient = await prisma.patient.findUnique({
+      where: { id: parsed.data.patientId },
+      include: { user: { select: { email: true, name: true } } },
+    });
+    if (patient?.user.email) {
+      sendAlertEmail({
+        toEmail: patient.user.email,
+        toName: patient.user.name ?? "Paciente",
+        alertType: parsed.data.type,
+        message: parsed.data.message,
+      }).catch(() => {
+        // Ignore email errors — alert is already saved
+      });
+    }
+  }
 
   return NextResponse.json(alert, { status: 201 });
 }

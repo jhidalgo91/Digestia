@@ -5,8 +5,13 @@ import { requireSession } from "@/lib/getSession";
 import { sendApprovalNotification } from "@/lib/email";
 
 const patchSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED"]),
-});
+  status: z.enum(["APPROVED", "REJECTED", "PENDING"]).optional(),
+  role: z.enum(["PATIENT", "NUTRITIONIST", "ADMIN"]).optional(),
+  subscriptionStatus: z.enum(["FREE", "PRO", "ENTERPRISE", "CANCELLED"]).optional(),
+}).refine(
+  (d) => d.status !== undefined || d.role !== undefined || d.subscriptionStatus !== undefined,
+  { message: "At least one field must be provided" }
+);
 
 export async function PATCH(
   request: NextRequest,
@@ -32,11 +37,11 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const { status } = parsed.data;
+  const { status, role, subscriptionStatus } = parsed.data;
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, name: true, email: true, status: true },
+    select: { id: true, name: true, email: true, status: true, role: true },
   });
 
   if (!user) {
@@ -45,13 +50,24 @@ export async function PATCH(
 
   const updated = await prisma.user.update({
     where: { id },
-    data: { status },
-    select: { id: true, name: true, email: true, role: true, status: true },
+    data: {
+      ...(status && { status }),
+      ...(role && { role }),
+      ...(subscriptionStatus && { subscriptionStatus }),
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      subscriptionStatus: true,
+    },
   });
 
-  // Notify the user by email
+  // Notify the user by email when approval status changes
   try {
-    if (user.email && user.name) {
+    if (status && status !== user.status && user.email && user.name) {
       await sendApprovalNotification({
         userName: user.name,
         userEmail: user.email,
