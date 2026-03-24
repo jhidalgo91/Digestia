@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider          = "mysql"
   url               = env("DATABASE_URL")
   // Shadow DB used by Prisma Migrate. Provide a connection string
   // to a user that has permission to create databases (CREATE DATABASE).
@@ -53,18 +53,29 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  role          Role      @default(PATIENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  sessions      Session[]
-  patient       Patient?
-  nutritionist  Nutritionist?
+  id                 String             @id @default(cuid())
+  name               String?
+  email              String?            @unique
+  emailVerified      DateTime?
+  image              String?
+  password           String?            @db.Text
+  role               Role               @default(PATIENT)
+  status             UserStatus         @default(APPROVED)
+  subscriptionStatus SubscriptionStatus @default(FREE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  accounts           Account[]
+  sessions           Session[]
+  patient            Patient?
+  nutritionist       Nutritionist?
+  usageLogs          UsageLog[]
+}
+
+enum SubscriptionStatus {
+  FREE
+  PRO
+  ENTERPRISE
+  CANCELLED
 }
 
 enum Role {
@@ -73,40 +84,50 @@ enum Role {
   ADMIN
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PATIENT PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Patient {
-  id                   String             @id @default(cuid())
-  userId               String             @unique
-  weight               Float?
-  height               Float?
-  age                  Int?
-  sex                  Sex?
-  activityLevel        ActivityLevel      @default(MODERATE)
-  workSchedule         String?
-  usualSleepHours      Float?
-  allergies            String?            @db.Text
-  intolerances         String?            @db.Text
-  dietaryPreferences   String?            @db.Text
-  mode                 PatientMode        @default(AUTONOMOUS)
-  nutritionistId       String?
-  inviteCode           String?            @unique
-  targetCaloriesMin    Int?
-  targetCaloriesMax    Int?
-  targetProteinG       Float?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nutritionist         Nutritionist?      @relation(fields: [nutritionistId], references: [id])
-  intakes              Intake[]
-  habits               HabitLog[]
-  supplementLogs       SupplementLog[]
-  goals                Goal[]
-  progressLogs         ProgressLog[]
-  patientSupplements   PatientSupplement[]
-  mealPlans            MealPlan[]
+  id                 String              @id @default(cuid())
+  userId             String              @unique
+  weight             Float?
+  height             Float?
+  age                Int?
+  sex                Sex?
+  activityLevel      ActivityLevel       @default(MODERATE)
+  workSchedule       String?
+  usualSleepHours    Float?
+  allergies          String?             @db.Text
+  intolerances       String?             @db.Text
+  dietaryPreferences String?             @db.Text
+  mode               PatientMode         @default(AUTONOMOUS)
+  nutritionistId     String?
+  inviteCode         String?             @unique
+  targetCaloriesMin  Int?
+  targetCaloriesMax  Int?
+  targetProteinG     Float?
+  archivedAt         DateTime?
+  archivedReason     String?             @db.Text
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nutritionist       Nutritionist?       @relation(fields: [nutritionistId], references: [id])
+  intakes            Intake[]
+  habits             HabitLog[]
+  supplementLogs     SupplementLog[]
+  goals              Goal[]
+  progressLogs       ProgressLog[]
+  patientSupplements PatientSupplement[]
+  mealPlans          MealPlan[]
+  alerts             DeviationAlert[]
+  invitationCode     InvitationCode?
 }
 
 enum Sex {
@@ -131,16 +152,17 @@ enum PatientMode {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Nutritionist {
-  id          String    @id @default(cuid())
-  userId      String    @unique
-  bio         String?   @db.Text
-  specialty   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  patients    Patient[]
-  mealPlans   MealPlan[]
-  alerts      DeviationAlert[]
+  id              String           @id @default(cuid())
+  userId          String           @unique
+  bio             String?          @db.Text
+  specialty       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patients        Patient[]
+  mealPlans       MealPlan[]
+  alerts          DeviationAlert[]
+  invitationCodes InvitationCode[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,32 +170,32 @@ model Nutritionist {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model MealPlan {
-  id              String         @id @default(cuid())
-  patientId       String
-  nutritionistId  String?
-  name            String
-  description     String?        @db.Text
-  startDate       DateTime
-  endDate         DateTime?
-  isActive        Boolean        @default(true)
-  targetCalMin    Int?
-  targetCalMax    Int?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  nutritionist    Nutritionist?  @relation(fields: [nutritionistId], references: [id])
-  plannedMeals    PlannedMeal[]
+  id             String        @id @default(cuid())
+  patientId      String
+  nutritionistId String?
+  name           String
+  description    String?       @db.Text
+  startDate      DateTime
+  endDate        DateTime?
+  isActive       Boolean       @default(true)
+  targetCalMin   Int?
+  targetCalMax   Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  nutritionist   Nutritionist? @relation(fields: [nutritionistId], references: [id])
+  plannedMeals   PlannedMeal[]
 }
 
 model PlannedMeal {
-  id          String     @id @default(cuid())
+  id          String   @id @default(cuid())
   mealPlanId  String
   dayOfWeek   Int?
   mealType    MealType
-  description String     @db.Text
-  colorTag    ColorTag   @default(NEUTRAL)
-  orderIndex  Int        @default(0)
-  mealPlan    MealPlan   @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  description String   @db.Text
+  colorTag    ColorTag @default(NEUTRAL)
+  orderIndex  Int      @default(0)
+  mealPlan    MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   intakes     Intake[]
 }
 
@@ -198,28 +220,28 @@ enum ColorTag {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Intake {
-  id                    String           @id @default(cuid())
-  patientId             String
-  plannedMealId         String?
-  date                  DateTime
-  mealType              MealType
-  status                IntakeStatus     @default(PLANNED)
-  planDescription       String?          @db.Text
-  actualDescription     String?          @db.Text
-  photoUrl              String?
-  digestiveFeedback     DigestiveMood?
-  hasGas                Boolean?
-  processedFoodType     ProcessedType?
-  extraFat10g           Int              @default(0)
-  extraProtein10g       Int              @default(0)
-  extraFruit            Int              @default(0)
-  extremeHunger         Boolean          @default(false)
-  notes                 String?          @db.Text
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  patient               Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  plannedMeal           PlannedMeal?     @relation(fields: [plannedMealId], references: [id])
-  foodItems             IntakeFoodItem[]
+  id                String           @id @default(cuid())
+  patientId         String
+  plannedMealId     String?
+  date              DateTime
+  mealType          MealType
+  status            IntakeStatus     @default(PLANNED)
+  planDescription   String?          @db.Text
+  actualDescription String?          @db.Text
+  photoUrl          String?
+  digestiveFeedback DigestiveMood?
+  hasGas            Boolean?
+  processedFoodType ProcessedType?
+  extraFat10g       Int              @default(0)
+  extraProtein10g   Int              @default(0)
+  extraFruit        Int              @default(0)
+  extremeHunger     Boolean          @default(false)
+  notes             String?          @db.Text
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plannedMeal       PlannedMeal?     @relation(fields: [plannedMealId], references: [id])
+  foodItems         IntakeFoodItem[]
 }
 
 enum IntakeStatus {
@@ -355,16 +377,16 @@ model SupplementLog {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Goal {
-  id          String     @id @default(cuid())
+  id          String    @id @default(cuid())
   patientId   String
   type        GoalType
   targetValue Float?
   targetDate  DateTime?
-  description String?    @db.Text
-  isActive    Boolean    @default(true)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  patient     Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
 enum GoalType {
@@ -376,20 +398,20 @@ enum GoalType {
 }
 
 model ProgressLog {
-  id              String   @id @default(cuid())
-  patientId       String
-  date            DateTime
-  weight          Float?
-  bodyFatPercent  Float?
-  muscleMassKg    Float?
-  waistCm         Float?
-  hipCm           Float?
-  energyLevel     Int?
-  hungerLevel     Int?
-  moodLevel       Int?
-  notes           String?  @db.Text
-  createdAt       DateTime @default(now())
-  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  patientId      String
+  date           DateTime
+  weight         Float?
+  bodyFatPercent Float?
+  muscleMassKg   Float?
+  waistCm        Float?
+  hipCm          Float?
+  energyLevel    Int?
+  hungerLevel    Int?
+  moodLevel      Int?
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@unique([patientId, date])
 }
@@ -399,15 +421,47 @@ model ProgressLog {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model DeviationAlert {
-  id               String          @id @default(cuid())
-  patientId        String?
-  nutritionistId   String?
-  type             AlertType
-  message          String          @db.Text
-  isRead           Boolean         @default(false)
-  resolvedAt       DateTime?
-  createdAt        DateTime        @default(now())
-  nutritionist     Nutritionist?   @relation(fields: [nutritionistId], references: [id])
+  id             String        @id @default(cuid())
+  patientId      String?
+  nutritionistId String?
+  type           AlertType
+  message        String        @db.Text
+  isRead         Boolean       @default(false)
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  nutritionist   Nutritionist? @relation(fields: [nutritionistId], references: [id])
+  patient        Patient?      @relation(fields: [patientId], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVITATION CODES (Nutritionist → Patient linking)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InvitationCode {
+  id             String       @id @default(cuid())
+  code           String       @unique
+  nutritionistId String
+  patientId      String?      @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+  nutritionist   Nutritionist @relation(fields: [nutritionistId], references: [id], onDelete: Cascade)
+  patient        Patient?     @relation(fields: [patientId], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USAGE LOGS (AI token tracking)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UsageLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  tokensUsed Int?
+  model      String?
+  metadata   String?  @db.Text
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum AlertType {
@@ -420,4 +474,3 @@ enum AlertType {
   SUPPLEMENT_MISSED
   CUSTOM
 }
-

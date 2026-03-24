@@ -17,7 +17,11 @@ const config = {
         },
       },
     ],
+    "^.+\\.js$": ["ts-jest", { tsconfig: { module: "CommonJS", allowJs: true } }],
   },
+  transformIgnorePatterns: [
+    "/node_modules/(?!(@auth/prisma-adapter)/)",
+  ],
   clearMocks: true,
   collectCoverage: false,
   coverageDirectory: "coverage",
