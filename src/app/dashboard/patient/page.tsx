@@ -431,16 +431,14 @@ export default function PatientHomePage() {
                           onClick={() =>
                             updateField("processedType", formFields.processedType === value ? "" : value)
                           }
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all text-left ${
-                            formFields.processedType === value
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 text-xs font-medium transition-all text-left ${formFields.processedType === value
                               ? color
                               : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
-                          }`}
+                            }`}
                         >
                           <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                              formFields.processedType === value ? dot : "bg-gray-300"
-                            }`}
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${formFields.processedType === value ? dot : "bg-gray-300"
+                              }`}
                           />
                           <span className="font-semibold">{label}</span>
                           <span className="text-gray-400 font-normal ml-1 hidden sm:inline">{hint}</span>
@@ -459,11 +457,10 @@ export default function PatientHomePage() {
                           onClick={() =>
                             updateField("digestion", formFields.digestion === value ? "" : value)
                           }
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${
-                            formFields.digestion === value
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors ${formFields.digestion === value
                               ? "border-emerald-500 bg-emerald-50 text-emerald-700"
                               : "border-gray-200 text-gray-600"
-                          }`}
+                            }`}
                         >
                           {icon} {label}
                         </button>

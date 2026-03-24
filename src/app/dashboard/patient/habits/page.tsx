@@ -275,8 +275,8 @@ export default function HabitsPage() {
                     type="button"
                     onClick={() => update("waterGlasses", i + 1)}
                     className={`text-lg transition-transform ${i < form.waterGlasses
-                        ? "opacity-100 scale-110"
-                        : "opacity-30"
+                      ? "opacity-100 scale-110"
+                      : "opacity-30"
                       }`}
                   >
                     💧

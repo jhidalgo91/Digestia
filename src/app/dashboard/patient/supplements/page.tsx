@@ -275,8 +275,8 @@ export default function SupplementsPage() {
               <div
                 key={ps.id}
                 className={`flex items-center gap-4 rounded-xl border p-4 transition-all ${taken
-                    ? "bg-emerald-50 border-emerald-200"
-                    : "bg-white border-gray-200"
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-white border-gray-200"
                   }`}
               >
                 {/* Checkbox toggle */}
@@ -284,8 +284,8 @@ export default function SupplementsPage() {
                   onClick={() => toggleTaken(ps)}
                   disabled={isSaving || !isEditable}
                   className={`w-9 h-9 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${taken
-                      ? "bg-emerald-500 border-emerald-500 text-white"
-                      : "border-gray-300 hover:border-emerald-400"
+                    ? "bg-emerald-500 border-emerald-500 text-white"
+                    : "border-gray-300 hover:border-emerald-400"
                     } ${isSaving ? "opacity-50" : ""}`}
                 >
                   {taken && (

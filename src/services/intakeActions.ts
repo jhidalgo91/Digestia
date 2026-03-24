@@ -3,96 +3,96 @@
 import { prisma } from "../lib/prisma";
 import { getCurrentUserId } from "../lib/getSession";
 import {
-  UpdateIntakeSchema,
-  UpdateIntakePayload,
-  EditIntakeSchema,
-  EditIntakePayload,
+    UpdateIntakeSchema,
+    UpdateIntakePayload,
+    EditIntakeSchema,
+    EditIntakePayload,
 } from "./schemas";
 
 const MAX_EDIT_DAYS = 7;
 
 function assertWithinEditWindow(date: Date) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - MAX_EDIT_DAYS);
-  cutoff.setHours(0, 0, 0, 0);
-  if (date < cutoff) {
-    throw new Error(`Solo puedes editar registros de los últimos ${MAX_EDIT_DAYS} días.`);
-  }
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - MAX_EDIT_DAYS);
+    cutoff.setHours(0, 0, 0, 0);
+    if (date < cutoff) {
+        throw new Error(`Solo puedes editar registros de los últimos ${MAX_EDIT_DAYS} días.`);
+    }
 }
 
 /** Full-field edit of an existing Intake with ownership + 7-day window check. */
 export async function editIntake(payload: EditIntakePayload) {
-  const userId = await getCurrentUserId();
-  if (!userId) throw new Error("No autenticado");
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("No autenticado");
 
-  const parsed = EditIntakeSchema.parse(payload);
-  const { intakeId, status, actualDescription, digestiveFeedback, processedFoodType, hasGas, extremeHunger, notes } = parsed;
+    const parsed = EditIntakeSchema.parse(payload);
+    const { intakeId, status, actualDescription, digestiveFeedback, processedFoodType, hasGas, extremeHunger, notes } = parsed;
 
-  const intake = await prisma.intake.findUnique({
-    where: { id: intakeId },
-    include: { patient: { include: { nutritionist: true } } },
-  });
-  if (!intake) throw new Error("Registro no encontrado");
+    const intake = await prisma.intake.findUnique({
+        where: { id: intakeId },
+        include: { patient: { include: { nutritionist: true } } },
+    });
+    if (!intake) throw new Error("Registro no encontrado");
 
-  // Ownership check: only the patient's own user may edit
-  if (intake.patient.userId !== userId) throw new Error("Sin permisos");
+    // Ownership check: only the patient's own user may edit
+    if (intake.patient.userId !== userId) throw new Error("Sin permisos");
 
-  // 7-day edit window
-  assertWithinEditWindow(intake.date);
+    // 7-day edit window
+    assertWithinEditWindow(intake.date);
 
-  const updated = await prisma.intake.update({
-    where: { id: intakeId },
-    data: {
-      status,
-      actualDescription: actualDescription ?? intake.actualDescription,
-      digestiveFeedback: digestiveFeedback ?? intake.digestiveFeedback,
-      processedFoodType: processedFoodType ?? intake.processedFoodType,
-      hasGas: hasGas ?? intake.hasGas,
-      extremeHunger: extremeHunger ?? intake.extremeHunger,
-      notes: notes ?? intake.notes,
-    },
-  });
-
-  // Re-evaluate deviation alerts when status is MODIFIED
-  if (status === "MODIFIED") {
-    const gasTrigger = hasGas ?? intake.hasGas;
-    if (gasTrigger) {
-      await prisma.deviationAlert.create({
+    const updated = await prisma.intake.update({
+        where: { id: intakeId },
         data: {
-          patientId: intake.patientId,
-          nutritionistId: intake.patient?.nutritionistId ?? null,
-          type: "GAS_LEGUMES",
-          message: `Edición histórica: gases registrados en ${intake.mealType}`,
+            status,
+            actualDescription: actualDescription ?? intake.actualDescription,
+            digestiveFeedback: digestiveFeedback ?? intake.digestiveFeedback,
+            processedFoodType: processedFoodType ?? intake.processedFoodType,
+            hasGas: hasGas ?? intake.hasGas,
+            extremeHunger: extremeHunger ?? intake.extremeHunger,
+            notes: notes ?? intake.notes,
         },
-      });
+    });
+
+    // Re-evaluate deviation alerts when status is MODIFIED
+    if (status === "MODIFIED") {
+        const gasTrigger = hasGas ?? intake.hasGas;
+        if (gasTrigger) {
+            await prisma.deviationAlert.create({
+                data: {
+                    patientId: intake.patientId,
+                    nutritionistId: intake.patient?.nutritionistId ?? null,
+                    type: "GAS_LEGUMES",
+                    message: `Edición histórica: gases registrados en ${intake.mealType}`,
+                },
+            });
+        }
+
+        const digestBad = (digestiveFeedback ?? intake.digestiveFeedback) === "BAD";
+        if (digestBad) {
+            await prisma.deviationAlert.create({
+                data: {
+                    patientId: intake.patientId,
+                    nutritionistId: intake.patient?.nutritionistId ?? null,
+                    type: "BAD_DIGESTION",
+                    message: `Edición histórica: mala digestión en ${intake.mealType}`,
+                },
+            });
+        }
+
+        const hunger = extremeHunger ?? intake.extremeHunger;
+        if (hunger) {
+            await prisma.deviationAlert.create({
+                data: {
+                    patientId: intake.patientId,
+                    nutritionistId: intake.patient?.nutritionistId ?? null,
+                    type: "EXTREME_HUNGER",
+                    message: `Edición histórica: hambre extrema en ${intake.mealType}`,
+                },
+            });
+        }
     }
 
-    const digestBad = (digestiveFeedback ?? intake.digestiveFeedback) === "BAD";
-    if (digestBad) {
-      await prisma.deviationAlert.create({
-        data: {
-          patientId: intake.patientId,
-          nutritionistId: intake.patient?.nutritionistId ?? null,
-          type: "BAD_DIGESTION",
-          message: `Edición histórica: mala digestión en ${intake.mealType}`,
-        },
-      });
-    }
-
-    const hunger = extremeHunger ?? intake.extremeHunger;
-    if (hunger) {
-      await prisma.deviationAlert.create({
-        data: {
-          patientId: intake.patientId,
-          nutritionistId: intake.patient?.nutritionistId ?? null,
-          type: "EXTREME_HUNGER",
-          message: `Edición histórica: hambre extrema en ${intake.mealType}`,
-        },
-      });
-    }
-  }
-
-  return updated;
+    return updated;
 }
 
 export async function updateIntakeStatus(payload: UpdateIntakePayload) {
